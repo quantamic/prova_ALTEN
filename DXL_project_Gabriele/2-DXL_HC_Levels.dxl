@@ -1,0 +1,252 @@
+/*
+*
+* Author:	E.Caredda
+* Subject:	Divisione su livelli di un database DOORS.
+*			Stampa in output dell'ID della riga attuale e della relativa azione effettuata.
+*			
+*
+* History:
+* 19/10/2022 Author: 0.01 - Creation of DXL_HC_Levels
+*
+*/
+
+Object o		//oggetto corrente
+Object oldo		//oggetto precedente
+Object oldo2	//ultimo oggetto di livello 2
+Object oldo3	//ultimo oggetto di livello 3
+
+bool first = true
+int ncreated=0
+string strid1
+string strid2
+string strid3
+string strid4
+string strid5
+string strid6
+
+for o in current do {
+	
+	//salto le righe create dal loop
+	if (ncreated>0) {
+		ncreated--
+		print "\t cancello riga\n"
+		continue
+	}
+	
+	print "Analizzo " o."Import_ID" "" ":\n"
+	
+	//leggo i valori della riga attuale
+	strid1=o."ID" ""
+	strid2=o."H/C Function ID LEVEL 2" ""
+	strid3=o."H/C Function ID LEVEL 3" ""
+	
+	//eseguo il primo ciclo del loop
+	if (first==true) {
+		first=false
+		if ((strid2!="")&&((strid3=="")||(strid3=="-"))) {
+			print "\t new1, 2 si 3 no --> \n"
+			Object newo = create(below(o))
+			o."Object Heading"=o."H/C Function LEVEL 1" ""
+			newo."Object Heading"=o."H/C Function  LEVEL 2" ""
+			newo."H/C Function ID LEVEL 2"=o."H/C Function ID LEVEL 2" ""
+		//	o."Obj Type"=""
+		//	newo."Object Type"="Reqt"
+			o."Object Type"=""
+			newo."Object Type"="Function"
+			newo."H/C Function LEVEL 1"=o."H/C Function LEVEL 1" ""
+			newo."H/C Function  LEVEL 2"=o."H/C Function  LEVEL 2" ""
+			newo."ID"=o."ID" ""
+			
+			//o."H/C Function LEVEL 1"=""
+			o."H/C Function  LEVEL 2"=""
+			o."H/C Function ID LEVEL 2"=""
+			
+			ncreated++
+			oldo2=newo
+		}
+	else	if ((strid2!="")&&(strid3!="")) {
+			print "\t new1, 2 si 3 si --> \n"
+			
+			Object newo = create(below(o))
+			o."Object Heading"=o."H/C Function LEVEL 1" ""
+			newo."Object Heading"=o."H/C Function  LEVEL 2" ""
+			newo."H/C Function ID LEVEL 2"=o."H/C Function ID LEVEL 2" ""
+			newo."H/C Function  LEVEL 2"=o."H/C Function  LEVEL 2" ""
+
+			ncreated++
+			
+			Object newnewo = create(below(newo))
+			newnewo."Object Text"=o."H/C Function  LEVEL 3" ""
+			newnewo."H/C Function ID LEVEL 3"=o."H/C Function ID LEVEL 3" ""
+			newnewo."H/C Function  LEVEL 3"=o."H/C Function  LEVEL 3" ""
+			newnewo."H/C Function  LEVEL 2"=o."H/C Function  LEVEL 2" ""
+			newnewo."ID"=o."ID" ""
+			newnewo."H/C Function ID LEVEL 2"=o."H/C Function ID LEVEL 2" ""
+			newnewo."Object Type"="Function"
+		//	newnewo."Object Type"="Reqt"
+			newo."Object Type"=""
+			o."Object Type"=""
+			
+			
+		//	o."Obj Type"=""
+		//	newo."Obj Type"=""
+			//o."H/C Function LEVEL 1"=""
+			o."H/C Function  LEVEL 2"=""
+			o."H/C Function  LEVEL 3"=""
+			o."H/C Function ID LEVEL 2"=""
+			o."H/C Function ID LEVEL 3"=""
+			ncreated++
+			oldo2=newo
+			oldo3=newnewo
+		}
+	oldo=o
+	strid4=oldo."ID" ""
+	strid5=oldo."H/C Function ID LEVEL 2" ""
+	strid6=oldo."H/C Function ID LEVEL 3" ""
+	continue
+	}
+	
+	//dal secondo giro faccio il confronto con gli ID precedenti
+	if (strid1!=strid4) {
+		if ((strid2!="")&&((strid3=="")||(strid3=="-")||(strid3==" -"))) {
+		print "\t new1, 2 si 3 no --> \n"
+			Object newo = create(below(o))
+			o."Object Heading"=o."H/C Function LEVEL 1" ""
+			newo."Object Heading"=o."H/C Function  LEVEL 2" ""
+			newo."H/C Function ID LEVEL 2"=o."H/C Function ID LEVEL 2" ""
+			//o."H/C Function LEVEL 1"=""
+			newo."Object Type"="Function"
+			
+		//	o."Obj Type"=""
+			o."Object Type"=""
+		//	newo."Object Type"="Reqt"
+			newo."H/C Function LEVEL 1"=o."H/C Function LEVEL 1" ""
+			newo."H/C Function  LEVEL 2"=o."H/C Function  LEVEL 2" ""
+			newo."ID"=o."ID" ""
+			o."H/C Function  LEVEL 2"=""
+			o."H/C Function ID LEVEL 2"=""
+			ncreated++
+			oldo2=newo
+		}
+		
+		else if ((strid2!="")&&(strid3!="")) {
+		print "\t new1, 2 si 3 si --> \n"
+			Object newo = create(below(o))
+			o."Object Heading"=o."H/C Function LEVEL 1" ""
+			newo."Object Heading"=o."H/C Function  LEVEL 2" ""
+			newo."H/C Function ID LEVEL 2"=o."H/C Function ID LEVEL 2" ""
+			newo."H/C Function  LEVEL 2"=o."H/C Function  LEVEL 2" ""
+
+			ncreated++
+			Object newnewo = create(below(newo))
+			newnewo."Object Text"=o."H/C Function  LEVEL 3" ""
+			newnewo."H/C Function ID LEVEL 3"=o."H/C Function ID LEVEL 3" ""
+			newnewo."H/C Function  LEVEL 3"=o."H/C Function  LEVEL 3" ""
+			newnewo."H/C Function  LEVEL 2"=o."H/C Function  LEVEL 2" ""
+			newnewo."ID"=o."ID" ""
+			newnewo."H/C Function ID LEVEL 2"=o."H/C Function ID LEVEL 2" ""
+			newnewo."Object Type"="Function"
+		//	newo."Obj Type"=""
+		//	o."Obj Type"=""
+		//	newnewo."Object Type"="Reqt"
+			newo."Object Type"=""
+			o."Object Type"=""
+			//o."H/C Function LEVEL 1"=""
+			o."H/C Function  LEVEL 2"=""
+			o."H/C Function  LEVEL 3"=""
+			o."H/C Function ID LEVEL 2"=""
+			o."H/C Function ID LEVEL 3"=""
+			ncreated++
+			oldo2=newo
+			oldo3=newnewo
+		}
+		oldo=o
+		strid4=oldo."ID" ""
+		strid5=oldo."H/C Function ID LEVEL 2" ""
+		strid6=oldo."H/C Function ID LEVEL 3" ""
+		continue
+	}
+	
+	if ((strid1==strid4)&&(strid2!=strid5)) {
+		if ((strid2!="")&&((strid3=="")||(strid3=="-")||(strid3==" -"))) {
+			print "\t new2, 3 no --> \n"
+			Object newo=create(after(oldo2))
+			newo."Object Heading"=o."H/C Function  LEVEL 2" ""
+			newo."H/C Function ID LEVEL 2"=o."H/C Function ID LEVEL 2" ""
+			newo."Object Type"="Function"
+		//	o."Obj Type"=""
+		//	newo."Object Type"="Reqt"
+			o."Object Type"=""
+			newo."H/C Function LEVEL 1"=o."H/C Function LEVEL 1" ""
+			newo."H/C Function  LEVEL 2"=o."H/C Function  LEVEL 2" ""
+			newo."ID"=o."ID" ""
+			
+			//ncreated++
+			oldo2=newo
+		}
+		
+
+		
+		
+	else	if ((strid2!="")&&(strid3!="")) {
+		print "\t new2, 3 si --> \n"
+			Object newo=create(after(oldo2))
+			newo."Object Heading"=o."H/C Function  LEVEL 2" ""
+			newo."H/C Function ID LEVEL 2"=o."H/C Function ID LEVEL 2" ""
+			newo."H/C Function LEVEL 1"=o."H/C Function LEVEL 1" ""
+			newo."H/C Function  LEVEL 2"=o."H/C Function  LEVEL 2" ""
+			newo."ID"=o."ID" ""
+			//ncreated++
+			Object newnewo = create(below(newo))
+			newnewo."Object Text"=o."H/C Function  LEVEL 3" ""
+			newnewo."H/C Function ID LEVEL 3"=o."H/C Function ID LEVEL 3" ""
+			o."H/C Function ID LEVEL 3"=""
+
+			newnewo."H/C Function  LEVEL 3"=o."H/C Function  LEVEL 3" ""
+			newnewo."H/C Function  LEVEL 2"=o."H/C Function  LEVEL 2" ""
+			newnewo."ID"=o."ID" ""
+			newnewo."H/C Function ID LEVEL 2"=o."H/C Function ID LEVEL 2" ""
+			newnewo."Object Type"="Function"
+		//	newo."Obj Type"=""
+		//	o."Obj Type"=""
+		//	newnewo."Object Type"="Reqt"
+			newo."Object Type"=""
+			o."Object Type"=""
+			
+			
+			
+			//ncreated++
+			oldo2=newo
+			oldo3=newnewo
+		}
+		oldo=o
+		strid4=oldo."ID" ""
+		strid5=oldo."H/C Function ID LEVEL 2" ""
+		strid6=oldo."H/C Function ID LEVEL 3" ""
+		hardDelete(o)
+		continue
+	}
+	
+	if ((strid2==strid5)&&(strid3!=strid6)) {
+	print "\t new3 --> \n"
+		Object newo=create(after(oldo3))
+		//ncreated++
+		newo."Object Text"=o."H/C Function  LEVEL 3" ""
+		newo."H/C Function ID LEVEL 3"=o."H/C Function ID LEVEL 3" ""
+
+		newo."H/C Function ID LEVEL 2"=o."H/C Function ID LEVEL 2" ""
+		newo."Object Type"="Function"
+	//	newo."Object Type"="Reqt"
+		newo."H/C Function LEVEL 1"=o."H/C Function LEVEL 1" ""
+		newo."H/C Function  LEVEL 2"=o."H/C Function  LEVEL 2" ""
+		newo."ID"=o."ID" ""
+		
+		oldo=o
+		strid4=oldo."ID" ""
+		strid5=oldo."H/C Function ID LEVEL 2" ""
+		strid6=oldo."H/C Function ID LEVEL 3" ""
+		oldo3=newo
+		hardDelete(o)
+		continue
+	}
+}

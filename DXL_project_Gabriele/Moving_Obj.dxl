@@ -1,0 +1,715 @@
+/********************************************************************
+*
+* $FILENAME:    Moving_Obj.DXL
+* $DESCRIPTION: This script can be used in order to move some objects
+*				from one module to another
+* $AUTHORS:     Andrea Colucci, Edoardo Consonni, Eugenio Caredda  
+* $VERSIONS:    1.00 -> 16/01/2023
+*
+********************************************************************/
+
+
+
+/* Principal string definitions */ 
+
+const string GUI_ALL_SINGLE[]       = "All"
+const string READING_MODULE_NAMES[] = {"/B-AMMS/I - ICD AMMS/FMS_EDCU_Logical_Data", "<MANUAL INSERTION>"}
+const string WRITING_MODULE_NAMES[] = {"/EDCU Project/EDCU/B - SRS Requirements/AW169_EDCU_Logical_Data", "<MANUAL INSERTION>"}
+const string TWO_OPTIONS[] = {"INPUT", "OUTPUT"}
+const string LINK_MODULE_NAMES[]    = {"/EDCU Project/EDCU/B - SRS Requirements/EDCUData_to_FMSData ", "<MANUAL INSERTION>"}
+const string Heading_Predefined[] 	= {"FMS ACTIVE FLIGHT PLAN DATA", "FMS DB DATA", "FMS DIRECT TO DATA", "FMS CMD RESPONSE DATA","EDCU to FMS DATA", "NAVSENS_DATA", "PROGRESS_DATA", "GENERIC_DATA", "DEPARTURES","ARRIVALS", "HOLDING", "PERF_INIT", "VFR", "SAR", "FIX"}
+const string Options[]              = {"YES", "NO"}
+const string SCOPE				    = "External"
+
+
+/* Some GUI elements */
+
+/* Dialog BOX */
+
+DB gui_box
+
+/* Dialog BOX Elements */
+
+DBE reading_module_path_in
+DBE reading_module_name_in
+DBE writing_module_path_in													
+DBE writing_module_name_in
+DBE heading_in
+DBE heading_under
+DBE single_text_in
+DBE link_module_name_in
+DBE reading_module_in
+DBE writing_module_in
+DBE link_module_in
+DBE heading_under_same
+DBE heading_under_predefined
+DBE heading_under_insertion
+DBE twostrings
+DBE twostrings_choice
+
+/* Some stuff we're gonna use in order to run our program */
+
+Object O
+
+Skip   myList = create
+
+string LastHeading
+string Object_Heading_Reading
+string Object_Text_Reading
+string Heading_Copy_Requested
+string Heading_Copy_to
+string custom_heading
+
+bool   HFLAG = false
+bool   SECOND_HEADER = false	
+
+bool   PREDEF_HEADER = true
+bool   isOptionAvailable = false
+
+int   n = 0
+int   Absolute_number
+int   Absolute_Find
+int   Index
+int   heading_same_YESNO
+int   heading_same
+int   IO_choice
+int   IO_which
+
+
+
+/* Here the user can find some functions */
+
+/* Objects description
+
+1. Reading_Inactive:
+
+			@type			: function
+			@caption        : this function is used to set input and buttons in active or inactive configurations,
+							  based on user needs, and is applied on the reading module (the one you are copying from)
+			@formal params  : DBE
+			@returns        : NULL (it's a void function)
+
+2. Writing_Inactive:
+
+			@type			: function
+			@caption        : this function is used to set input and buttons in active or inactive configurations,
+							  based on user needs, and is applied on the writing module (the one you are copying into)
+			@formal params  : DBE
+			@returns        : NULL (it's a void function)
+
+3. Link_Inactive:
+
+			@type			: function
+			@caption        : this function is used to set input and buttons in active or inactive configurations,
+							  based on user needs, and is applied on the link module
+			@formal params  : DBE
+			@returns        : NULL (it's a void function)
+
+4. Choice_Inactive:
+			
+			@type			: function
+			@caption		: this function is used to able or disable choice windows in user interface
+			@formal params  : DBE
+			@returns        : NULL (it's a void function)
+			
+5. Heading_Copy_TO:
+
+			@type			: function
+			@caption        : this function is used to set the Object Heading in the Writing Module
+			@formal params  : DBE
+			@returns        : NULL (it's a void function)
+
+6. isOption:
+
+			@type    	 	: function
+			@caption		: this function is used to able or disable choice option windows in user interface
+			@formal params  : DBE 
+			@returns        : NULL (it's a void function)
+			
+7. isHeadingSame:
+
+			@type			: function
+			@caption        : this function is used in order to discriminate between common Object Heading 
+							  in the Writing Module or not.
+			@formal params  : DBE
+			@returns        : NULL (it's a void function)
+			
+8. Retry:
+
+			@type			: function
+			@caption        : this function puts back the DOORS window interface once you've messed up something
+							  (for instance, you put a wrong Object Heading)
+			@formal params  : DB
+			@returns        : NULL (it's a void function)
+
+9. CreateLink:
+
+			@type			: function
+			@caption        : this function creates an outgoing link from O1 to O2.
+			@formal params  : Object, Object, DB
+			@returns        : NULL (it's a void function)
+
+10. FindABS:
+
+			@type			: function
+			@caption        : this function searches for the Object Heading you want to copy from in the reading module. 
+							  Once it is found, it stores the absolute numbers of the Object Texts located
+							  under the Object Heading in a Skip dictionary. This is done in order to improve computational
+							  costs and better memory management
+			@formal params  : Skip, Module
+			@returns        : Skip 
+
+11. Add_Obj:
+
+			@type			: function
+			@caption        : this function copies the objects in the writing module as requested. In particular, it searches for
+							  the object heading requested in the writing module, and then adds the object texts under it, linking them
+							  to the ones contained in the Reading Module.
+			@formal params  : Module, Module, Skip, Object
+			@returns        : NULL (it's a void function)
+			
+12. FindABS_Reading:
+
+			@type			: function
+			@caption        : this function searches for the Object Heading you want to move the Texts under. 
+							  It loops around the Writing Module, searches for a corrispondence. When this is found, 
+							  it saves the Absolute Number of the Row and returns it.
+			@formal params  : Module, string
+			@returns        : int
+			
+13. CopyCommands:
+
+			@type			: function
+			@caption        : this is the core function. It creates all the GUI, and then calls the other functions
+							  in order to move Objects between the two Modules given in input.
+			@formal params  : DB
+			@returns        : NULL (it's a void function)
+*/
+
+/* Reading_Inactive */
+
+void Reading_Inactive(DBE reading_module_in){
+	
+    int sel_reading = get(reading_module_in)
+	
+    if (sel_reading == 1) {
+        active(reading_module_name_in)
+    }
+	else{
+        inactive(reading_module_name_in)
+    }
+}
+
+/* Writing_Inactive */
+
+void Writing_Inactive(DBE writing_module_in){
+	
+    int sel_writing = get(writing_module_in)
+	
+    if (sel_writing == 1) {
+        active(writing_module_name_in)
+    }
+	else{
+        inactive(writing_module_name_in)
+    }
+}
+
+/* Link_Inactive */
+
+void Link_Inactive(DBE link_module_in){
+	
+    int sel_link = get(link_module_in)
+	
+    if (sel_link == 1) {
+        active(link_module_name_in)
+    }
+	else{
+        inactive(link_module_name_in)
+    }
+}
+
+/* Choice Inactive */
+
+void Choice_Inactive(DBE choice_in){
+
+	int set_choice = get(choice_in)
+	
+	if(set_choice == 1){
+		active(choice_in)
+	}
+	else{
+		inactive(choice_in)
+	}
+
+}
+/* isOption */
+
+void isOption(DBE copying_opt){
+	
+    int option_flag = get(copying_opt)
+	
+    if (option_flag == 0) {
+        active(twostrings)
+    }
+	else{
+        inactive(twostrings)
+    }
+}
+
+/* isHeadingSame */
+
+void isHeadingSame(DBE heading_under_same){
+	
+    int heading_same_YESNO = get(heading_under_same)
+	
+    if (heading_same_YESNO == 1) {
+        active(heading_under_predefined)
+		active(heading_under_insertion)
+    }
+	else{
+        inactive(heading_under_predefined)
+		inactive(heading_under_insertion)
+    }
+}
+
+/* Retry */
+
+void Retry(DB box){
+	show(gui_box)
+}
+
+/* CreateLink */
+
+void CreateLink(Object O1,  Object O2, DB box){
+	int link_selection = get(link_module_in)
+	string LinkInput
+	
+	
+	if(link_selection != 0){
+		LinkInput = get(link_module_name_in)
+	}else {
+		LinkInput = LINK_MODULE_NAMES[get(link_module_in)]
+	}
+	
+	if(!exists module LinkInput){
+		DB error_box
+		error_box = centered "ERROR"
+		label(error_box, "The link module name inserted doesn't exist")
+		ok(error_box, "Retry", Retry)
+		show(error_box)
+	}
+	
+	O1 -> LinkInput -> O2
+}
+
+/* FindABS */
+
+Skip FindABS(Skip myList, Module M){
+
+	for O in M do{
+		
+		if(isDeleted(O)){continue}
+		
+		Object_Heading_Reading = O."Object Heading" ""
+		Object_Text_Reading    = O."Object Text" ""
+		Absolute_number	= O."Absolute Number"
+		
+		if(HFLAG){
+			if(Object_Heading_Reading != "" ){
+				HFLAG = false
+				return myList
+				break
+			}
+			put(myList, n, Absolute_number)
+			n++
+		}
+		if(Object_Heading_Reading == Heading_Copy_Requested){
+			HFLAG = true
+			LastHeading = Object_Heading_Reading
+			Absolute_Find = Absolute_number
+			print("Matched:\n")
+			print("Object Heading requested from reading module: '"Object_Heading_Reading"' was found.\n")
+		}
+		else{
+			continue
+		}
+		
+	}
+	
+return myList
+
+}
+
+/* Add_Obj */
+
+void Add_Obj(Module Reading_Module, Module Writing_Module, Skip Text_List, Object Heading_Search, bool isOpt){
+	
+bool Object_Heading_Found = false
+int Absno_heading = 0
+	if(isOpt == false){
+		for O in Writing_Module do{
+			
+			if(isDeleted(O)){
+				continue
+			}
+			
+			Object_Heading_Writing = O."Object Heading" ""
+			
+			if(Object_Heading_Writing == Heading_Search."Object Heading" ""){
+				//print "Object Heading requested from writing module: '"Object_Heading_Writing"' was found.\n"
+				Object_Heading_Found = true
+				Absno_heading = O."Absolute Number"
+				break
+			}
+		}
+		
+		if(!Object_Heading_Found){
+			Object New = create(last(Writing_Module))
+			New."Object Heading" = Heading_Search."Object Heading" ""
+			
+			for Index in Text_List do{
+				Object Insert       = object(Index, Reading_Module)
+				Object create_after = create(below(New))
+				create_after."Object Text" = Insert."Object Text" ""
+				create_after."SCOPE" = SCOPE
+				CreateLink(create_after,Insert, gui_box)
+			}
+			
+		}
+		
+		if(Object_Heading_Found){
+			Object Refound_HD       = object(Absno_heading, Writing_Module)
+			for Index in Text_List do{
+				Object Insert       = object(Index, Reading_Module)
+				Object create_after = create(last(below(Refound_HD)))
+				create_after."Object Text" = Insert."Object Text" ""
+				create_after."SCOPE" = SCOPE
+				CreateLink(create_after,Insert, gui_box)
+			}
+			
+		}
+	}
+	else{
+		for O in Writing_Module do{
+			
+			if(isDeleted(O)){
+				continue
+			}
+			
+			Object_Heading_Writing = O."Object Heading" ""
+			
+			if(Object_Heading_Writing == Heading_Search."Object Heading" ""){
+				Object_Heading_Found = true
+				Absno_heading = O."Absolute Number"
+				break
+			}
+		}
+		
+		if(!Object_Heading_Found){
+			Object New = create(last(Writing_Module))
+			New."Object Heading" = Heading_Search."Object Heading" ""
+			
+			for Index in Text_List do{
+				Object Insert       = object(Index, Reading_Module)
+				Object create_after = create(below(New))
+				string sstream = Insert."Object Text" ""
+				int len = length(sstream)
+				if(sstream[len-3:len-1] == "VAL" || sstream[len-6:len-1] == "LENGTH"){
+					if(sstream[len-3:len-1] == "VAL"){
+						string firstr  = sstream[0:3]
+						string i 	   = "i"
+						string secondr = sstream[4:len-5]
+						string add     = "_k_VAL"
+						string cumstr  = firstr "" i "" secondr "" add 
+						create_after."Object Text" = cumstr 
+						create_after."SCOPE"       = SCOPE
+						CreateLink(create_after, Insert, gui_box)
+					}
+					else{
+						string firstr  = sstream[0:3]
+						string i 	   = "i"
+						string secondr = sstream[4:len-8]
+						string add     = "_k_LENGTH"
+						string cumstr  = firstr "" i "" secondr "" add 
+						create_after."Object Text" = cumstr 
+						create_after."SCOPE"       = SCOPE
+						CreateLink(create_after, Insert, gui_box)
+					}
+				}
+				else{
+					string firstr  = sstream[0:3]
+					string i 	   = "i"
+					string secondr = sstream[4:len]
+					string k  	   = "_k"
+					string cumstr  = firstr "" i "" secondr "" k
+					create_after."Object Text" = cumstr
+					create_after."SCOPE" = SCOPE
+					CreateLink(create_after,Insert, gui_box)
+				}
+			}
+			
+		}
+		
+		if(Object_Heading_Found){
+			Object Refound_HD       = object(Absno_heading, Writing_Module)
+			for Index in Text_List do{
+				Object Insert       = object(Index, Reading_Module)
+				Object create_after = create(last(below(Refound_HD)))
+				string sstream = Insert."Object Text" ""
+				int len = length(sstream)
+				if(sstream[len-3:len-1] == "VAL" || sstream[len-6:len-1] == "LENGTH"){
+					if(sstream[len-3:len-1] == "VAL"){
+						string firstr  = sstream[0:3]
+						string i 	   = "i"
+						string secondr = sstream[4:len-5]
+						string add     = "_k_VAL"
+						string cumstr  = firstr "" i "" secondr "" add 
+						create_after."Object Text" = cumstr 
+						create_after."SCOPE"       = SCOPE
+						CreateLink(create_after, Insert, gui_box)
+					}
+					else{
+						string firstr  = sstream[0:3]
+						string i 	   = "i"
+						string secondr = sstream[4:len-8]
+						string add     = "_k_LENGTH"
+						string cumstr  = firstr "" i "" secondr "" add 
+						create_after."Object Text" = cumstr 
+						create_after."SCOPE"       = SCOPE
+						CreateLink(create_after, Insert, gui_box)
+					}
+				}
+				else{
+					string firstr  = sstream[0:3]
+					string i 	   = "i"
+					string secondr = sstream[4:len]
+					string k  	   = "_k"
+					string cumstr  = firstr "" i "" secondr "" k
+					create_after."Object Text" = cumstr
+					create_after."SCOPE" = SCOPE
+					CreateLink(create_after,Insert, gui_box)
+				}
+			}
+			
+		}
+	
+	}
+	
+	
+}
+
+/* FindABS_Reading */
+
+int FindABS_Reading(Module myModule, string myHeading){
+	string s
+	int Absno_second_hd
+	bool iFound = false
+	for O in myModule do{
+		
+		if(isDeleted(O)){
+			continue
+		}
+		
+		s = O."Object Heading" ""
+		
+		if(s == myHeading){
+			iFound = true
+			Absno_second_hd = O."Absolute Number"
+			break
+		}
+	}
+	
+	if(!iFound){
+		DB error_box
+		error_box = centered "ERROR"
+		label(error_box, "The object heading you are looking for in the writing module doesn't exist.")
+		ok(error_box, "Retry", Retry)
+		show(error_box)
+	}
+	
+	return Absno_second_hd
+	
+}
+
+
+/* CopyCommands */
+
+void CopyCommands(DB box){
+
+//prendo la stringa relativa al modulo di lettura
+	int reading_selection = get(reading_module_in)
+	Object search
+	string ReadingInput
+	if (reading_selection != 0){
+		ReadingInput = get(reading_module_name_in)
+	} else {
+		ReadingInput = READING_MODULE_NAMES[get(reading_module_in)]
+	}
+	
+//APERTURA MODULO DI LETTURA
+	Module M = read(ReadingInput, false)
+	if(!exists module ReadingInput){
+		DB error_box
+		error_box = centered "ERROR"
+		label(error_box, "The reading module name inserted doesn't exist")
+		ok(error_box, "Retry", Retry)
+		show(error_box)
+	}
+	
+	custom_heading         = get(heading_under_insertion)
+	Heading_Copy_Requested = get(heading_in)
+	heading_same_YESNO     = get(heading_under_same)
+	heading_same           = get(heading_under_predefined)
+	IO_choice 			   = get(twostrings)
+	
+	if(custom_heading != ""){
+		PREDEF_HEADER = false
+		Heading_Copy_to = custom_heading
+		SECOND_HEADER = true
+	}
+	
+	if (heading_same_YESNO == 0){
+		PREDEF_HEADER = false
+		Heading_Copy_to = Heading_Copy_Requested
+		SECOND_HEADER = false
+	}
+	
+	if(PREDEF_HEADER){
+		Heading_Copy_to  = Heading_Predefined[heading_same]
+	}
+	
+	if(IO_choice == 0){
+		isOptionAvailable = true
+	}
+	
+	
+//prendo la stringa relativa al modulo di scrittura
+	int writing_selection = get(writing_module_in)
+	string WritingInput
+	if (writing_selection != 0){
+		WritingInput = get(writing_module_name_in)
+	} else {
+		WritingInput = WRITING_MODULE_NAMES[get(writing_module_in)]
+	}
+
+//APERTURA MODULO DI SCRITTURA
+	//Module R = read(WritingInput, false)
+	Module R = read(WritingInput, false)
+	setExclusive()
+	if(!exists module WritingInput){
+		DB error_box
+		error_box = centered "ERROR"
+		label(error_box, "The writing module name inserted doesn't exist")
+		ok(error_box, "Retry", Retry)
+		show(error_box)
+	}
+	
+	Skip Find = FindABS(myList, M)
+	
+	if(PREDEF_HEADER == false && SECOND_HEADER == false){
+		//Skip Find = FindABS(myList, M)
+		search    = object(Absolute_Find, M)
+		//Add_Obj(M, R, Find, search, true)
+		if(isOptionAvailable){
+			Add_Obj(M, R, Find, search, true)	
+		}
+		else{
+			Add_Obj(M, R, Find, search, false)
+		}
+		print "if1"
+	}
+	
+	if(PREDEF_HEADER){
+		Absolute_Find = FindABS_Reading(R,Heading_Copy_to)
+		search = object(Absolute_Find,R)
+		if(isOptionAvailable){
+			Add_Obj(M, R, Find, search, true)	
+		}
+		else{
+			Add_Obj(M, R, Find, search, false)
+		}
+	}
+	
+	if(SECOND_HEADER){
+		Absolute_Find = FindABS_Reading(R,Heading_Copy_to)
+		search = object(Absolute_Find,R)
+		if(isOptionAvailable){
+			Add_Obj(M, R, Find, search, true)	
+		}
+		else{
+			Add_Obj(M, R, Find, search, false)
+		}
+		print "if2"
+	}
+	
+
+}
+
+/* main */
+
+void main () {
+
+    
+    gui_box = centered "Moving Objects between DOORS Modules"; 
+	
+	//INTERFACCIA UTENTE PER SELEZIONARE IL MODULO DI TEST, INSERIRE IL PERCORSO DEI TEST ED IL NOME
+	label(gui_box, "Reading Module to copy from")
+	reading_module_in = choice (gui_box, "Select the Reading Module: ", READING_MODULE_NAMES, 0)															
+	//reading_module_path_in = field (gui_box, "Reading Module path:  ", "", 100)																	
+	reading_module_name_in = field (gui_box, "<Insert Reading Module filename>  ", "", 50)
+	inactive reading_module_name_in
+	
+
+	//separator(gui_box);
+
+	label(gui_box, "Object Heading")
+	heading_in = field (gui_box, "Write the Object Heading you need to copy: ", "", 50)
+	label(gui_box, "Text Copying Options")
+	heading_under_same = choice(gui_box, "Do you want to copy the Object Texts under the same heading? ", Options, 1)
+	
+	heading_under_predefined = choice(gui_box, "Predefined choices: ", Heading_Predefined, 0)
+	heading_under_insertion = field (gui_box, "<Insert your custom heading> ", "", 50)
+	
+	label(gui_box, "Additional Copying Options")
+	
+	twostrings = choice(gui_box, "Set copying option: ", TWO_OPTIONS, 0)
+	
+	separator(gui_box);	//Places a full width separating line across dialog box gui_box. (PAG. 529)
+	
+	label(gui_box, "Writing Module to copy to");
+	writing_module_in = choice(gui_box, "Writing Module Name: ", WRITING_MODULE_NAMES, 0)
+																			
+	writing_module_name_in = field (gui_box, "<Insert Writing Module filename>  ", "", 50)
+	inactive writing_module_name_in
+	
+	separator(gui_box)	//Places a full width separating line across dialog box gui_box. (PAG. 529)
+	
+	label(gui_box, "Link Module required")
+	link_module_in = choice(gui_box, "Link Module Name: ", LINK_MODULE_NAMES, 0)
+																			
+	link_module_name_in = field (gui_box, "<Insert Link Module name>  ", "", 50)
+	inactive link_module_name_in
+	
+	
+	
+	set(heading_under_same, isHeadingSame)
+	set(reading_module_in, Reading_Inactive)
+	set(writing_module_in, Writing_Inactive)	
+	set(link_module_in, Link_Inactive)
+
+	ok(gui_box, "Copy Commands", CopyCommands)
+	
+	show(gui_box)
+	
+}
+
+/* Disable execution timeout */
+
+pragma runLim, 0
+
+/* calling main function */
+
+main()
+
+
+/* End Program */

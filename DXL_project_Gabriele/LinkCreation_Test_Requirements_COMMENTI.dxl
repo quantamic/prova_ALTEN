@@ -1,0 +1,1054 @@
+// PROVA
+
+/*
+*
+* Author: M.Giacani
+* Subject: This tool can be used to create incoming links to the requirements from their corresponding test.
+*          The DXL starts by asking the users for the requirements and test modules. When pressing 'CheckModules' the
+*          DXL tries to open the modules and, if it can't, it resets the fields (of both modules or also only of one) as blank:
+*          Then the DXL starts looping through the tests module, for each test it exctracts the absolute numbers of the corresponding requirements.
+*          Then, having the absolute number, the DXL finds the corresponding requirement in the other module and creates the link, while
+*          also reporting the created links on a csv file.
+*
+* Additional Function: The DXL also reports on the log file which of the requirements (in the tests module) are separated by a space and not by '\n'
+*
+* History:
+* 19/07/2022 M.Giacani: 0.01 - Creation of DXL_LinkCreation_Test_Requirements
+* 06/09/2022 M.Giacani: 0.02 - Added All/Single and Active/Inactive
+* 08/09/2022 M.Giacani: 0.03 - Added final check and Req not true
+*
+*/
+
+
+// ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+
+// inclusione libreria per la funzione split
+#include <Utility/Tools.dxl>
+// inclusione libreria per stampare il file log (stampa contemporaneamente anche a schermo)
+#include <Utility/LogHandler.dxl>
+
+
+
+// ------------------------------------------------------------------------------------------------------------------------| PROVA CON GUI E LOG |-------------------------------------------------------
+
+
+
+// Definizione delle stringhe costanti principali:
+
+const string GUI_LOG_LEVELS[]       = {"Disabled", "Errors", "Warnings", "Info", "Verbose"};
+const string GUI_ALL_SINGLE[]       = {"All", "Single"};
+
+const string TEST_MODULES_PATH[]    = {"/C1-CDS SW/TEST_TRAX/", "/C1-CDS SW/TEST_TRAX/"};
+const string TEST_MODULES_NAMES[]   = {"AW169_STD_ANALYSIS", "AW189_STD_ANALYSIS", "Manual"};
+
+const string MAIN_MODULES_PATH[]    = {"/C1-CDS SW/4-SRS/", "/C1-CDS SW/4-SRS/","/C1-CDS SW/3-SRD/", "/C1-CDS SW/3-SRD/EICAS/", "/C1-CDS SW/3-SRD/FPS/", "/C1-CDS SW/3-SRD/Opt_Set/", "/C1-CDS SW/3-SRD/SURV/", "/C1-CDS SW/4-SDD/", "/C1-CDS SW/4-SDD/"};
+const string MAIN_MODULES_NAMES[]   = {"SRS_CDS_AW1x9", "SRS_EICAS_AW1x9", "SRD_ASW_AW1x9", "SRD_EICAS_AW1x9", "SRD_FPS", "SRD_Opt_Set", "SRD_SURV", "SDD_CDS_AW1x9", "SDD_EICAS_AW1x9", "Manual"};
+
+const string DEFAULT_OUTPUT_FOLDER  = "C:\\myTools\\temp_test\\";
+
+string NOME_LINK = "/C1-CDS SW/TEST_TRAX/DOORS Links"; //DOORS Links
+
+const string DIV = ";   ";
+
+
+// GUI elements:
+
+//Dialog BOX
+DB gui_box; //è una dialogue box, quindi un'interfaccia utente
+//Dialog BOX Elements
+DBE gui_all_single_in;
+DBE gui_log_choice;
+DBE stringIn;
+DBE test_name_in;
+DBE req_name_in;
+DBE input_path_1_in;
+DBE input_path_2_in;
+DBE module_name_1_in;
+DBE module_name_2_in;
+DBE manualCheck_button;
+
+
+// Definizione variabili intere:
+
+int input_path_1_check;
+int module_name_1_check;
+int input_path_2_check;
+int module_name_2_check;
+
+int LogCheck = 0;
+int ModCheck1 = 0;
+int ModCheck2 = 0;
+
+int mod2_length = 0;
+int total_length;
+int progress_step = 0;
+
+int test_index;
+int req_index;
+int choice_all_or_single;
+
+int MegaCheck = 0;
+int check1;
+int check2;
+
+int TotalLinks = 0;
+int WrongLinks = 0;
+int ReqNotTrueLinks = 0;
+
+// Definizione stringhe:
+
+string input_path_1;
+string input_path_2;
+string module_name_1;
+string module_name_2;
+
+string PREFIXES[9];
+
+
+// moduli:
+
+Module module1;
+Module module2;
+
+
+// file:
+
+Stream file_report;
+Stream file_Req_not_true;
+Stream file_WrongRequirements;
+
+
+// output:
+
+string output_file_path = DEFAULT_OUTPUT_FOLDER;
+
+
+
+// --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+  
+
+void EffectiveLinkCreation(Module module1_function, Module module2_function, int single) {
+	
+	int check_alt = 0;
+	 
+	if (findPlainText(module2_function."name" "", "AW189_STD_ANALYSIS", keyword_offset, keyword_length, true)) {  	
+		if (findPlainText(module1_function."name" "", "SRS_CDS_AW1x9", keyword_offset, keyword_length, true)) { 
+			check_alt = 1;
+		}
+		if (findPlainText(module1_function."name" "", "SRD_ASW_AW1x9", keyword_offset, keyword_length, true)) { 
+			check_alt = 1;
+		}
+	}
+	if (check_alt==1) {
+		NOME_LINK = "/C1-CDS SW/TEST_TRAX/LINK_TA_REQ";
+	}
+	else {
+		NOME_LINK = "/C1-CDS SW/TEST_TRAX/DOORS Links";
+	}
+	
+	file_report = write (output_file_path "Links_Report_"module1_function."name""_"module2_function."name"".csv");
+	file_report << ""module1_function."name" ": Absolute Number" DIV "linkname" DIV module2_function."name" ": Absolute Number" "\n";
+	flush(file_report);
+
+    string s1;
+    string s2;
+
+    check1=0;
+    check2=0;
+	int check3=0;
+
+    int Created_Links_Count;
+    Created_Links_Count=0;	 
+	
+	// la stringa s1 si passa tutti i nomi delle colonne del modulo 1  
+	for s1 in module1_function do {
+		
+		// controllo se esiste la colonna "_Req?" nel modulo 2	
+		if (findPlainText(s1, "_Req?", keyword_offset, keyword_length, true)) {  
+		
+			check3=1;
+		}
+	}
+	// se non trova la colonna "_Req?" il check3 rimane a zero (ovvero il valore a cui era stato inizializzato)
+    if (check3==0) {     
+	
+        logError("ATTENZIONE: colonna '_Req?' non esiste in  "module1_function."name" "  !!!");
+		return;
+    }
+	
+	// la stringa s2 si passa tutti i nomi delle colonne del modulo 2  
+    for s2 in module2_function do { 
+	
+        // controllo se esiste la colonna "TracedRequirements" nel modulo 2	 
+        if (findPlainText(s2, "TracedRequirements", keyword_offset, keyword_length, true)) {   
+		
+            check1=1; 
+			logInfo(">> Trovato attributo TracedRequirements nel modulo2");
+        }
+	
+        // controllo se esiste la colonna "TracedRequirements" nel modulo 2	 
+        if (findPlainText(s2, "Requirements SRD/SRS", keyword_offset, keyword_length, true)) {   
+		
+            check2=1; 
+			logInfo(">> Trovato attributo Requirements SRD/SRS nel modulo2");
+        }
+    }
+	// se non trova la colonna "TracedRequirements" il check2 rimane a zero (ovvero il valore a cui era stato inizializzato)
+    if (check2==0 and check1==0) {     
+	
+        logError("ATTENZIONE: colonna 'TracedRequirements' non esiste in  "module2_function."name" "  !!!");
+		return;
+    }
+
+    Object row_2;
+     
+	string PREFIX = module1_function."Prefix" ""; 
+	
+	// parto facendo un for che scorra le righe del modulo con i test
+    for row_2 in module2_function do {                    
+
+        // se una riga è cancellata salto direttamente a quella dopo
+        if (isDeleted(row_2)) {             
+            continue;
+        }  
+		
+		string row2_requirements;
+		
+		if (check2==1) {
+			
+			// prendo i requisiti del test
+			row2_requirements = row_2."Requirements SRD/SRS";
+		}
+		// nel AW189 i requisiti non stanno nell'attributo 'Requirements SRD/SRS' ma stanno in 'TracedRequirements'
+		else {
+			
+			// prendo i requisiti del test
+			row2_requirements = row_2."TracedRequirements";
+		}
+		
+		logVerbose(">> searching in "row2_requirements"");
+		
+		// report dei requisiti divisi dallo spazio invece che da '\n'
+		if (findPlainText(row2_requirements, " ", keyword_offset, keyword_length, true)) {
+			
+			logError(">> In "row2_requirements" the requirements are separated by a space (absolute number of the test: "row_2."Absolute Number" ")");
+		}
+               
+		// controllo che ci sia almeno un requisito  
+        if (row2_requirements!=null) {  
+
+			// creo lista per dividere i vari requisiti
+			Skip rows2_req_list;
+			rows2_req_list = create();
+			
+			int rows2_req_list_count;
+			// divido i requisiti con '\n'
+			rows2_req_list_count = split(row2_requirements, rows2_req_list, '\n');
+			
+			if (rows2_req_list_count>0) {
+			
+				int row2_index;
+				string row2_req;
+				
+				// scorro i requisiti dividi da '\n' della prima lista
+				for row2_index in 0:(rows2_req_list_count-1) do {
+				
+					find (rows2_req_list, row2_index, row2_req);
+					
+					// creo una seconda lista
+					Skip row2_req_list_bis;
+					row2_req_list_bis = create();
+					
+					int rows2_req_list_count_bis;
+					// ridivido i requisiti anche con lo spazio
+					rows2_req_list_count_bis = split(row2_req, row2_req_list_bis, ' ');
+					
+					if (rows2_req_list_count_bis>0) {
+						
+						int row2_index_bis;
+						string row2_req_bis;
+						
+						// scorro i requisiti della seconda lista, ovvero divisi sia da '\n' che da uno spazio ' '
+						for row2_index_bis in 0:(rows2_req_list_count_bis-1) do {
+							
+							find (row2_req_list_bis, row2_index_bis, row2_req_bis);
+							
+							logVerbose(">> searching in specific "row2_req_bis" after dividing requirements using a space and backslash n");
+
+							if (findPlainText(row2_req_bis, PREFIX, keyword_offset_p, keyword_length_p, true)) {                          
+
+								// tolgo il prefisso ricavando l'absolute number
+								string Abs_Num_1_string = row2_req_bis[keyword_length_p:];
+								
+								logVerbose(">> got the absolute number: "Abs_Num_1_string" from "row2_req_bis "");
+								
+								// converto l'absolute number da stringa a d intero
+								int Abs_Num_1 = intOf (Abs_Num_1_string);
+								
+								Object row_1;
+								// rialgo alla riga del modulo 1 corrispondente all'absolute number in questione
+								row_1 = object(Abs_Num_1, module1_function);
+								
+								if (row_1 != null) {
+			
+									Link outLink;
+									int check_duplicato = 0;		
+									
+									for outLink in all(row_2->("*")) do {									
+										
+										string target_mod_name = fullName(target(outLink));
+										if (!findPlainText(target_mod_name, module1_function."name" "", keyword_offset, keyword_length, true)) {
+											continue;
+										}
+										else {
+											
+											Object row_check;
+											row_check = target(outLink);
+											int abs_num_check = row_check."Absolute Number";
+
+											if (abs_num_check == Abs_Num_1) {	
+												check_duplicato = 1;
+											}
+										}
+									}
+									
+									if (check_duplicato==0) {
+										// creo link che va dal test al requisito										   
+										row_1 <- NOME_LINK <- row_2;
+								
+										if (!findPlainText(row_1."_Req?" "", "True", keyword_offset, keyword_length, true)) { 
+										
+											file_Req_not_true << "Requirement "Abs_Num_1_string" of the module "module1_function."name" " linked to test " row_2."Absolute Number" " of the module " module2_function."name" "\n";
+											ReqNotTrueLinks = ReqNotTrueLinks + 1;
+										}
+			
+										//riporto i link creati su un file
+										file_report << Abs_Num_1_string DIV NOME_LINK DIV row_2."Absolute Number" "\n";
+										flush (file_report);
+										Created_Links_Count = Created_Links_Count + 1;
+										logVerbose(">> Successfully created a link in "Abs_Num_1_string "" " from " row_2."Absolute Number" "");
+									}
+									else {
+										logInfo(">> Link in "Abs_Num_1_string "" " from " row_2."Absolute Number" " already existed !!!");
+									}
+								}
+								else {
+								
+									logError (">> NO requirement found for "row2_req_bis" of test " row_2."Absolute Number" "");
+								}
+							}
+							else {
+							
+								if (single==1) { // ovvero se si è selezionato Single e non All
+								
+									if (row_2."Object Heading" == null) {
+										file_WrongRequirements << "Requirement "row2_req_bis" of the test "row_2."Absolute Number"" module "module2_function."name" " does not exist in "module1_function."name""\n";
+										WrongLinks = WrongLinks + 1;
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+        }
+		else {
+		
+			logError(">> test " row_2."Absolute Number" " has no requirements");
+		}
+		
+		progress_step = progress_step + 1;
+		progressStep (progress_step);
+		progressMessage ("Creating Links:  " progress_step" of "total_length "");
+    }
+	 
+    logInfo(">>>>  "Created_Links_Count"  Links have been created");
+	
+	TotalLinks = TotalLinks + Created_Links_Count;
+	
+	close (file_report);
+}
+
+
+
+
+// -----------------------------------------------------------------------------------------------------------------------------------------------
+
+
+
+void checkModuleStatus(Module moduleToCheck, string expected_name) {
+
+    string current_module_name;
+
+    if(moduleToCheck == null){
+        logError("Failed to open '" expected_name "': null module");
+        closeLogFile()
+        halt();
+    }
+    
+    current_module_name = moduleToCheck."name";
+        
+    if (current_module_name == expected_name) {
+        logInfo("Module '" expected_name "' opened successfully");
+    } else {
+        logError("Failed to open '" expected_name "' module");
+        closeLogFile()
+        halt();
+    }
+}
+
+
+
+// -------------------------------------------------------------------------------------------------------------------------------
+
+
+
+int find_total_length (Module mod_tot_length) {
+	
+	Object row2;
+	
+	int length = 0;
+	
+    for row2 in mod_tot_length do {
+        if (!isDeleted(row2)) {
+            length += 1;
+        }
+    }
+	
+	int tot = length ;
+	
+	return (tot);
+}
+
+
+
+// -------------------------------------------------------------------------------------------------------------------------------------------
+
+
+
+void LogSet(DB box) {
+
+	// prendo il livello di log scelto dall'utente
+	int log_choice = get(gui_log_choice); //PRENDO LA SCELTA DEI LOG DELL'UTENTE (IMPORTANZA MINIMA DEI LOG DA STAMPARE)       
+	output_file_path = get(stringIn); //PRENDO LA STRINGA DIGITATA DALL'UTENTE CON IL PERCORSO DEL FILE DEI LOG
+    
+	if(!fileExists_(output_file_path "\\.")){ //bool fileExists_(string filename). It is used by several of the DXL Library tools to determine whether a file exists. (PAG. 190)
+		                                      //SE IL FILE DI OUTPUT SELEZIONATO NON ESISTE GIà LO SI CREA
+		mkdir(output_file_path , ""); //Creates directory dirName. (PAG. 185)
+	}
+	
+	// imposta il livello minimo di importanza dei log da stampare
+	setLogVariables(log_choice, output_file_path); //E' UNA FUNZIONE CHE STA NEL PACCHETTO Utility/LogHandler.dxl
+	                                               //PENSO CHE SETTI IL LOG DANDO IL LIVELLO MINIMO SCELTO DALL'UTENTE ED IL PERCORSO INSERITO DAL'UTENTE
+		
+	LogCheck = 1; //UNA VOLTA IMPOSTATO IL LOG SI METTE UN FLAG PER ESSERE SEGNARE DI AVERLO FATTO
+}
+
+
+
+// ------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+
+void FinalCheckAll(Module moduleCheck) {
+	
+	logVerbose(">>entrati in FinalCheckAll");
+	
+	Object rowCheck;	
+	string column_to_check;
+	
+	if (check1==1) {		
+		if (check2==1) {			
+			column_to_check = "Requirements SRD/SRS";
+		}
+		else {		
+			column_to_check = "TracedRequirements";
+		}
+	}
+
+	progressStart (gui_box, "Tests Verification ", "", total_length);
+	
+	progress_step = 0;
+
+	for rowCheck in moduleCheck do {
+		
+		if (isDeleted(rowCheck)) {
+            continue;
+        }
+
+		int check4;
+		check4 = 0;		
+		string RequirementsCheck = rowCheck.column_to_check "";
+
+		if (rowCheck."Object Heading" == null) {
+			for (j=0; j<9; j++) {
+	
+				string prefix;
+				prefix = PREFIXES[j];
+				
+				if (findPlainText(RequirementsCheck, prefix, keyword_offset, keyword_length, true)) { 			
+					check4 = 1;
+				}
+			}
+		
+			if(check4==0) {			
+				file_WrongRequirements << "" RequirementsCheck " del test " rowCheck."Absolute Number" " non è collegato a nessuno dei requisiti" "\n";
+				WrongLinks = WrongLinks + 1;
+			}
+			else {			
+				logVerbose(">> " RequirementsCheck" collegato a qualcuno");
+			}
+		}
+		
+		progress_step = progress_step + 1;
+		progressStep (progress_step);
+		progressMessage ("Verificating Tests:  " progress_step" of "total_length "");
+	}
+	
+	progressStop;
+}
+
+
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+
+void CreateLinks(DB box) {
+
+	// LogCheck è per non farlo due volte in caso l'utente prema o non prema il bottone CheckModules
+	//CONTROLLO DI AVER GIà IMPOSTATO IL LOG. SE NON L'HO GIà FATTO LANCIO LA FUNZIONE PER FARLO
+	if (LogCheck==0) {
+		
+		LogSet(gui_box); //FUNZIONE CUSTOMIZZATA (VEDI SOPRA)
+	}
+
+
+
+
+	choice_all_or_single = get(gui_all_single_in); //PRENDO LA SCELTA DELL'UTENTE RISPETTO AI MODULI DI REQUIREMENTS (SE LINKARE TUTTI O SOLO UNO)
+	
+	if (choice_all_or_single==1) {  // choice_all_or_single==1 quando è single
+	
+		progressStart (gui_box, "Opening modules: ", "", 1); //void progressStart(DB box,string title,string message,int limit)
+															 //Displays the progress bar and window. The limit argument specifies the maximum value that is passed to progressStep. (PAG. 609)
+		logInfo(">> Progressbar started"); //VIENE STAMPATA L'INFO CHE LA PROGRESSBAR è INIZIATA NEL FILE DI LOG
+	
+		test_index = get(test_name_in); //SI PRENDONO I NOMI INSERITI DALL'UTENTE RIGUARDO AL MODULO DI TEST E DI REQUISITI
+		req_index = get(req_name_in);
+		
+		
+		
+		//CHECK SU MODULO DI TEST
+		if(test_index!=2) { //test_index!=2 quando non è manual, OVVERO SELEZIONO UNO DEI MODULI DI TEST PREDEFINITI
+		
+			progressMessage ("Opening test module..."); //NELLA BARRA DI PROGRESSO COMPARE QUESTO MESSAGGIO
+			
+			input_path_2 = TEST_MODULES_PATH[test_index]; //PRENDO QUINDI IL PERCORSO ED IL NOME DEL TEST FILE SELEZIONATO DALL'UTENTE
+			module_name_2 = TEST_MODULES_NAMES[test_index];	
+
+			logVerbose("apro in editing il modulo '" module_name_2 "' "); //STAMPO LA INFO CHE STO APRENDO IL MODULO DI TEST NELLE INFORMAZIONI VERBOSE (QUELLE MENO IMPORTANTI POSSIBILI)
+			module2 = edit(input_path_2 module_name_2, false); //These functions return a module handle for the module named name. The name argument can be an absolute or relative path. 
+															   //The read function opens the module for reading, edit for unshared editing, and share for shared editing. 
+															   //The optional disp flag enables the visibility of the opened module to be specified; the module is displayed in a window if disp is true or omitted.
+			filtering off; //NON FILTRARE LE INFO
+			checkModuleStatus(module2, module_name_2); //If the status is set, the function module terminates without an exception. If the status is not set, the exception STATUS_NOT_ACTIVE is triggered.
+			                                           //https://answers.sap.com/questions/4386098/function-module-statuscheck.html
+													   //CONTROLLA CHE IL MODULO SIA APERTO
+
+			logInfo("opened "module_name_2 ""); //STAMPO IL LOG DI APERTURA DEL FILE ESEGUITA CORRETTAMENTE
+		}
+		else { // si manual
+
+			//se prima l'utente ha fatto CheckManualModules, allora il modulo test è già aperto e ModCheck2==1
+			if (ModCheck2==0) {
+				
+				progressMessage ("Opening test module...");
+				
+				input_path_2 = get (input_path_2_in);
+				module_name_2 = get (module_name_2_in);
+			
+				logVerbose("apro in editing il modulo '" module_name_2 "' ");   
+				module2 = edit(input_path_2 module_name_2, false); 
+				filtering off;
+				checkModuleStatus(module2, module_name_2);
+				
+				logInfo("opened "module_name_2 "");
+			}		
+			
+		}
+		
+		
+		
+		//CHECK SU MODULO DI REQUISITI
+		if(req_index!=9) { //req_index!=9 quando non è manual
+		
+			progressMessage ("Opening requirements module...");
+
+			input_path_1 = MAIN_MODULES_PATH[req_index];	
+			module_name_1 = MAIN_MODULES_NAMES[req_index];		
+
+			logVerbose("apro in reading il modulo '" module_name_1 "' ");   
+			module1 = read(input_path_1 module_name_1, false);  
+			filtering off;
+			checkModuleStatus(module1, module_name_1);	
+
+			logInfo("opened "module_name_1 "");
+		}
+		else { // si manual
+
+			//se prima l'utente ha fatto CheckManualModules, allora il modulo requisiti è già aperto e ModCheck1==1
+			if (ModCheck1==0) {	
+			
+				progressMessage ("Opening requirements module...");
+			
+				input_path_1 = get (input_path_1_in);
+				module_name_1 = get (module_name_1_in);
+			
+				logVerbose("apro in reading il modulo '" module_name_1 "' ");   
+				module1 = read(input_path_1 module_name_1, false);  
+				filtering off;
+				checkModuleStatus(module1, module_name_1);
+				
+				logInfo("opened "module_name_1 "");
+			}			
+		}
+		progressStop;
+	}
+	
+	
+	
+	
+    logVerbose("========================= LINKS' CREATION ===============================");
+	
+    // verifico che esista il percorso  // se non esiste già, lo creo
+    if (!fileExists_(output_file_path"\\.")) {   
+        // le virgolette con il vuoto significano che non servono diritti di accesso per accedere al file	 
+        mkdir (output_file_path, "");             
+    }
+	
+	file_Req_not_true = write (output_file_path "LinkedRequirements_ReqNotTrue.csv");
+	file_Req_not_true << "Requisiti che sono stati linkati ad un test ma con _Req? non True" "\n";
+	
+	file_WrongRequirements = write (output_file_path "WrongRequirements.csv");
+	file_WrongRequirements << "Test con requisiti non presenti nei moduli dei requisiti dati:" "\n";
+
+	if (choice_all_or_single==1) { // choice_all_or_single==1 quando è single
+		
+		if (isRead(module2)) {
+			
+			logError(">> It is only possible to open in read mode the "module_name_2" module"); 
+			MegaCheck = 1;
+			
+			errorBox(gui_box, "It was not possible to open "module_name_2" in edit/share mode");
+		}
+		
+		if (MegaCheck==0) {
+			
+			logVerbose(">> Creating incoming links in  "module_name_1"  from  "module_name_2 "");
+			
+			total_length = find_total_length (module2);
+			logInfo(">> Found total length: " total_length"");
+			
+			progressStart (gui_box, "Creating Links: ", "", total_length);
+			logInfo(">> Progressbar started");
+	
+			EffectiveLinkCreation(module1, module2, 1);
+			
+			progressStop;
+			
+			edit(fullName(module2), true, true);
+		}
+	}
+	else { // quando è All
+		
+		int i;
+		int j;
+		int num = 0;
+		int num_mod;
+		
+		logVerbose(">> Creating incoming links in all the requirements modules from all the test modules");
+		
+		progressStart (gui_box, "Trying to open test module in edit or share mode ", "", 9);
+		
+		i = get(test_name_in);
+		
+		num_mod = 1;
+		
+		progress_step = num_mod;
+		progressStep (progress_step);
+		progressMessage ("Opening test module...");
+		logVerbose("Opening test module...");
+		
+		string path_test = TEST_MODULES_PATH[i];
+		string name_test = TEST_MODULES_NAMES[i];
+		Module test_mod = edit(path_test name_test, false);
+		
+		if (isRead(test_mod)) {
+			
+			logError(">> It is only possible to open in read mode the "name_test" module");
+			MegaCheck = 1;
+			
+			errorBox(gui_box, "It was not possible to open "name_test" in edit/share mode");
+		}
+		else {
+			
+			logVerbose(">> test module opened successfully");
+		}
+
+		progressStop;
+		
+		if (MegaCheck==0) {
+					
+			string path_test = TEST_MODULES_PATH[i];
+			string name_test = TEST_MODULES_NAMES[i];
+			Module test_mod = edit(path_test name_test, false);
+			filtering off
+			
+			total_length = find_total_length (test_mod);
+			logInfo(">> Found total length: " total_length" of the test module");
+			
+			// for naviga tra i 9 moduli dei requisiti
+			for (j=0; j<9; j++) {
+				
+				num = j + 1;		
+				
+				// una progressbar per ognuna delle 14 coppie di moduli
+				progressStart (gui_box, "Creating Links ("num" of 9): ", "", total_length);
+				logInfo(">> Progressbar started");
+				
+				progress_step = 0;
+				progressStep (progress_step);
+				progressMessage ("Opening module "num"...");
+				
+				string path_req = MAIN_MODULES_PATH[j];
+				string name_req = MAIN_MODULES_NAMES[j];
+				Module req_mod = read(path_req name_req, false);	
+				filtering off
+				
+				PREFIXES[j] = req_mod."Prefix";
+				
+				logInfo(">> Creating incoming links in  "name_req"  from  "name_test "");
+				
+				EffectiveLinkCreation(req_mod, test_mod, 0);			
+	
+				progressStop;
+			}
+			
+			FinalCheckAll(test_mod);
+			
+			edit(fullName(test_mod), true, true);
+		}
+	}
+	
+	close(file_Req_not_true);
+	close(file_WrongRequirements);
+
+	infoBox(gui_box, "Finished creating links:" "\n" "N.B. Save the opened module in order to maintain the created links !!!" "\n" "\n" "Total Links created: "TotalLinks";" "\n" "Wrong links found: "WrongLinks";" "\n" "Linked Requirements with '_Req?' not True: "ReqNotTrueLinks";" "\n");
+
+    // close output files
+    logVerbose("END date: " stringOf(dateAndTime(today)));
+    closeLogFile();
+}
+
+
+
+// --------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+
+void CheckManualModules(DB box) {
+	
+	// LogCheck è per non farlo due volte in caso l'utente prema o non prema il bottone GetColumns
+		//CONTROLLO DI AVER GIà IMPOSTATO IL LOG. SE NON L'HO GIà FATTO LANCIO LA FUNZIONE PER FARLO
+	if (LogCheck==0) {
+	
+		LogSet(gui_box);
+	}
+	
+	//CONTROLLO CHE IL FLAG PER IL CHECK DELL'ESISTENZA DEL MODULO INSERITO MANUALMENTE NON SIA STATO GIà FATTO
+	/////////////////////////////////////////////
+	/////// CHECK SUL MODULO DI REQUISITI ///////
+	/////////////////////////////////////////////
+	if (ModCheck1==0) { //ModCheck rimane a 0 se il modulo non va bene
+		
+		input_path_1 = get (input_path_1_in); //PRENDO PERCORSO E NOME DEL MODULO INSERITO MANUALMENTE
+		module_name_1 = get (module_name_1_in);
+	
+		logVerbose("apro in editing il modulo '" module_name_1 "' "); //DICO CHE STO APRENDO IN EDITING IL MODULO CUSTOM
+		module1 = read(input_path_1 module_name_1, false); //LEGGO IL MODULO
+
+		if(module1 == null){ //SE IL MODULO APERTO NON HA NULLA DENTRO
+			
+			logError("Failed to open '" module_name_1 "': null module");
+			set(input_path_1_in, ""); //RISETTO LE STRINGHE INSERITE DALL'UTENTE A DELLE STRINGHE NULLE
+			set(module_name_1_in, "");
+		}   
+		else {
+			
+			string current_module_name1;
+			current_module_name1 = module1."name"; //METTO NELLA NUOVA STRINGA L'ATTRIBUTO "Name" DEL MODULO "Module1", QUINDI IL NOME DEL MODULO
+			
+			if (current_module_name1 == module_name_1) { //SE IL NOME CHE LEGGO NEL FILE è UGUALE A QUELLO RICHIESTO DALL'UTENTE, ALLORA SIGNIFICA CHE HO APERTO IL FILE GIUSTO
+				
+				logInfo("Module '" module_name_1 "' opened successfully"); //NEI LOG DICO DI AVER APERTO IL FILE CORRETTAMENTE
+				ModCheck1 = 1; // il modulo va bene quindi metto ModCheck a 1
+				filtering off;
+			} 
+			else { // il modulo non va bene
+				
+				logError("Failed to open '" module_name_1 "' module");
+				logError(">> Inserted requirements module incorrect, try again !");
+				
+				// risetto i due field a vuoti
+				set(input_path_1_in, ""); //RISETTO LE STRINGHE INSERITE DALL'UTENTE A DELLE STRINGHE NULLE
+				set(module_name_1_in, "");
+			}
+		}
+	}
+	
+	
+	/////////////////////////////////////////////
+	///////// CHECK SUL MODULO DI TEST //////////
+	/////////////////////////////////////////////
+	//STESSA COSA DELL'IF PRECEDENTE, CAMBIANO SOLO LE VARIABILI DI INPUT, OVVERO SONO QUELLE RIFERITE AL MODULO DI TEST ORA
+	if (ModCheck2==0) { //ModCheck rimane a 0 se il modulo non va bene
+		
+		input_path_2 = get (input_path_2_in);
+		module_name_2 = get (module_name_2_in);
+	
+		logVerbose("apro in editing il modulo '" module_name_2 "' ");   
+		module2 = edit(input_path_2 module_name_2, false); 
+
+		if(module2 == null){
+			
+			logError("Failed to open '" module_name_2 "': null module");
+			set(input_path_2_in, "");
+			set(module_name_2_in, "");
+		}   
+		else {
+			
+			string current_module_name2;
+			current_module_name2 = module2."name";  
+			
+			if (current_module_name2 == module_name_2) {
+				
+				logInfo("Module '" module_name_2 "' opened successfully");
+				ModCheck2 = 1; // il modulo va bene quindi metto ModCheck a 1
+				filtering off;
+			} 
+			else { // il modulo non va bene
+				
+				logError("Failed to open '" module_name_2 "' module");
+				logError(">> Inserted tests module incorrect, try again !");
+				
+				// risetto i due field a vuoti
+				set(input_path_2_in, "");
+				set(module_name_2_in, "");
+			}
+		}
+		
+	}	
+}
+
+
+
+// -----------------------------------------------------------------------------------------------------------------------
+
+
+
+//ATTIVA O DISATTIVA I VARI CAMPI DI INSERIMENTO IN BASE ALLA SELEZIONE DELL'UTENTE RISPETTO ALL'INSERIMENTO IN TUTTI I MODULI DI REQUISITI O SOLO UNO
+void All_Single_Inactive(DBE gui_all_single_in){
+	
+    int selezione = get(gui_all_single_in);	
+	int sel_req = get(req_name_in);
+	int sel_test = get(test_name_in);
+	
+    if (selezione == 1) { // selezione==1 quando è Single
+
+		active(req_name_in); //SE SI VUOLE METTERE IL LINK IN UN SOLO MODULO ALLORA SI ATTIVA IL CAMPO DI INSERIMENTO
+	
+		if (sel_req == 9) { // ovvero quando è manual, SE POI IL SINGOLO MODULO DA COLLEGARE LO SI VUOLE INSERIRE MANUALMENTE E NON DA QUELLI PREDEFINITI, ALLORA SI ATTIVANO I CAMPI DI INSERIMENTO
+		
+			active(input_path_1_in);
+			active(module_name_1_in);
+		}
+		else { //SE INVECE SI SELEZIONA IL MODULO DA LINKARE DALLA LISTA DI QUELLI PREDEFINITI SI DISATTIVANO I CAMPI DI INSERIMENTO MANUALI
+			
+			inactive(input_path_1_in);
+			inactive(module_name_1_in);
+			
+			if (sel_test == 2) { //SE IL MODULO DI TEST INVECE è MESSO DA INPUT MANUALE ALLORA IL BOTTONE DI CHECK DEVE RIMANERE ATTIVO
+				show(manualCheck_button);
+			}
+			else { //ALTRIMENTI, NEL CASO IN CUI MODULO DI TEST E REQUISITI SONO INSERITI 
+				hide(manualCheck_button);
+			}
+		}
+    }
+	else{ //ALTRIMENTI SI DISATTIVA TUTTO
+	
+		inactive(input_path_1_in);
+		inactive(module_name_1_in);
+		inactive(req_name_in);
+		
+		if (sel_test != 2) { //E SE ANCHHE IL MODULO DI TEST NON è SELEZIONATO DA INSERIMENTO MANUALE ALLORA SI NASCONDE IL BOTTONE DI CHECK PER I CAMPI INSERITI MANUALMENTE
+			hide(manualCheck_button);
+		}
+		else { //SE INVECE IL MODULO DI TEST è SELEZIONATO DA INSERIMENTO MANUALE ALLORA SI METTE IL BOTTONE DI CHECK ATTIVO
+			show(manualCheck_button);
+		}
+    }
+}
+
+
+
+//SETTAGGIO DI INPUT E BOTTONI ATTIVI O DISATTIVI IN BASE ALLA SELEZIONE DELL'UTENTE, SUL MODULO DI TEST
+void Test_Inactive(DBE test_name_in){
+	
+    int sel_test = get(test_name_in);
+    int sel_req = get(req_name_in);
+    int selezione = get(gui_all_single_in);	
+	
+    if (sel_test == 2) { // sel_test==2 quando è Manual   SE SI STA EFFETTUANDO L'INPUT MANUALE DEL MODULO DI TEST SI ATTIVANO I CAMPI DI INSERIMENTO ED IL BOTTONE DI CHECK DELL'ESISTENZA DEL MODULO INSERITO
+	
+        active(input_path_2_in);
+        active(module_name_2_in);
+        show(manualCheck_button);
+    }
+	else{ //SE L'UTENTE HA SELEZIONATO UN MODULO DI TEST PREDEFINITO, ALLORA SI DISATTIVANO I CAMPI DI INSERIMENTO E SI NASCONDE IL BOTTONE DI CHECK DELL'ESISTENZA DEL MODULO INSERITO
+		
+        inactive(input_path_2_in);
+        inactive(module_name_2_in);
+		
+		if (sel_req != 9 or selezione == 0) { // sel_req==9 quando è Manual e selezione==0 quando è all
+		
+			hide(manualCheck_button);
+		}
+		
+    }
+}
+
+
+
+//SETTAGGIO DI INPUT E BOTTONI ATTIVI O DISATTIVI IN BASE ALLA SELEZIONE DELL'UTENTE, SUL MODULO DI REQUIREMENTS
+void Req_Inactive(DBE req_name_in){
+	
+    int sel_req = get(req_name_in);
+	
+    if (sel_req != 9) { // sel_req==9 quando è Manual
+	
+        inactive(input_path_1_in);
+        inactive(module_name_1_in);
+    }
+	else{
+		
+        active(input_path_1_in);
+        active(module_name_1_in);
+        show(manualCheck_button);
+    }
+	
+    int sel_test = get(test_name_in);
+
+	if (sel_req!=9 and sel_test!=2) {
+		hide(manualCheck_button);
+	}
+	else {
+		show(manualCheck_button);
+	}
+}
+
+
+
+// --------------------------------------------------------------------------------------------------------------------------------
+
+
+
+void main () {
+
+    string folder_path = stringOf(dateAndTime(today), userLocale(), "yyyMMdd_HHmm"); //CREA UNA STRINGA CON IL PERCORSO FILE ATTUALE
+    gui_box = centered "DOORS Link Creator"; //Creates a dialog box that is centered on the screen. Nothing appears on the screen until it is passed to either the block or show(dialog box) function, 
+	                                         //when the dialog box window title bar contains title. (PAG. 496)
+											 //ASSOCIA A GUI_BOX IL TITOLO "Doors Link Creator"
+	
+	
+	
+	
+	//INTERFACCIA UTENTE PER SELEZIONARE IL MODULO DI TEST, INSERIRE IL PERCORSO DEI TEST ED IL NOME
+	label(gui_box, "Test Module Choice"); //Creates a label element in dialog box gui_box. (PAG. 530)
+	                                      //CREA UN ELEMENTO LABEL NELLA BOX DI INTERFACCIA
+	test_name_in = choice (gui_box, "Test Module: ", TEST_MODULES_NAMES, 2); //Creates a drop-down selector. This shows only the current value until the user clicks in it, when the whole range is displayed. 
+	                                                                         //The initial argument specifies which value is selected by default, counting from 0. (PAG. 544)
+																			 //QUINDI è UNA SCELTA MULTIPLA CHE DI DEFAULT MOSTRA "Manual", MA SI POSSONO SELEZIONARE ANCHE DUE MODULI PREDEFINITI																	
+	input_path_2_in = field (gui_box, "Tests Module path:  ", "", 100);	//Creates a single-line text-field element. The parameters define a label, an initial value, the number of characters that are visible in the field, 
+	                                                                    //and whether the field is read only (true means read only). If the last argument is omitted, the function creates a read-write field.
+                                                                        //The width of the resulting element is independent of the default user interface font on the current platform.	 (PAG.533)
+                                                                        //CREA UN CAMPO NELLA QUALE SI DEVONO INSERIRE MASSIMO 100 CARATTERI CHE VANNO AD INDICARE IL "Test Module Path", OVVERO IL PERCORSO DEL MODULO DI TEST																		
+	module_name_2_in = field (gui_box, "Tests Module name:  ", "", 50); //STESSA COSA DI SOPRA, CON IL NOME DEL MODULO DI TEST, DI MASSIMO 50 CARATTERI (PAG.533)
+	separator(gui_box);	//Places a full width separating line across dialog box gui_box. (PAG. 529)
+	
+	
+	
+	
+	//INTERFACCIA UTENTE PER SELEZIONARE IL MODULO DI REQUISITI, INSERIRE IL PERCORSO ED IL NOME
+	label (gui_box, " Requirements Module choice: "); 
+	label (gui_box, "Select 'All' to create links between all the given requirements modules");
+	label (gui_box, "Select 'Single' to create links only between two of the modules");
+	gui_all_single_in = choice (gui_box, "Choice: ", GUI_ALL_SINGLE, 1); //FA SELEZIONARE SE "All" O "Single", PARTENDO DI DEFAULT DA "Single"
+	req_name_in = choice (gui_box, "Requirements Module: ", MAIN_MODULES_NAMES, 9);	//SCELTA MULTIPLA TRA I MODULI DI TEST PREDEFINITI, CHE DI DEFAULT PARTE DA "Manual"
+	input_path_1_in = field (gui_box, "Requirements Module path:  ", "", 100);	//CAMPO IN CUI SI INSERISCE IL PERCORSO DEL MODULO DI REQUISITI, DI 100 CARATTERI    
+	module_name_1_in = field (gui_box, "Requirements Module name:  ", "", 50);	//CAMPO IN CUI SI INSERISCE IL NOME DEL MODULO DI REQUISITI, DI 50 CARATTERI
+	separator(gui_box);
+	
+	
+	
+	
+	//NEL CASO IN CUI SI SIANO INSERITI PERCORSI E NOMI MANUALMENTE SI CONTROLLA CHE I DATI INSERITI SIANO CORRETTI
+	label (gui_box, "For Manual Modules' path and names");
+	label (gui_box, "press 'CheckManualModules' to check if their are correct or not");
+	label (gui_box, "(if a module does not open successfully it resets to blank)");	         	
+	manualCheck_button = apply(gui_box, "CheckManualModules", CheckManualModules); //Adds a button to the row of standard buttons on the dialog box, and associates it with the given callback function. 
+	                                                                               //If the label argument is passed, the button has that label; otherwise it has the standard label Apply.
+                                                                                   //When the user clicks the button, the function is called with the parent dialog box as the argument. 
+																				   //The dialog box remains on the screen, enabling this or other buttons to be clicked. (PAG. 561)
+																				   //CREA UN BOTTONE COL NOME UGUALE ALLA STRINGA E QUANDO LO SI PREME PARTE LA FUNZIONE CheckManualModules
+	separator(gui_box);
+	
+	
+	
+	
+	//SI VANNO A CHIEDERE PERCORSO E LIVELLO MINIMO DI IMPORTANZA DEI LOG DA STAMPARE (OUTPUT) "Disabled", "Errors", "Warnings", "Info", "Verbose"
+    label(gui_box, "Log: ");
+    stringIn = field(gui_box, "LOG path: ", DEFAULT_OUTPUT_FOLDER folder_path "\\", 60); //CAMPO IN CUI SI INSERISCE IL PERCORSO IN CUI STAMPARE I LOG, DI 60 CARATTERI
+	
+	// utente sceglie il livello minimo di importanza dei log da stampare   // default su Verboose (ovvero il minimo)
+    gui_log_choice = choice(gui_box, "Log level: ", GUI_LOG_LEVELS, 4); // DEFAULT SU VERBOSE (OVVERO IL MINIMO)            
+    
+	
+	
+	
+	// per attivare/disattivare i campi in base alle scelte
+	set(test_name_in, Test_Inactive); //Attaches a callback to any dialog box element other than a list view. The callback must be of the form:
+									  //void select(DBE option){
+									  //}
+									  //which fires when option changes.
+									  //The exact semantics vary depending on the type of element, but in principle it means a single click. 
+									  //For field elements, the callback only fires when the user clicks Return or Enter with the cursor in the field. (PAG. 521)
+    set(gui_all_single_in, All_Single_Inactive);
+	set(req_name_in, Req_Inactive);	
+	
+    // avvia la funzione CreateLinks
+    ok(gui_box, "CreateLinks", CreateLinks);         
+    show(gui_box);
+}
+
+
+// disable execution timeout
+pragma runLim, 0;
+
+
+main()
+
